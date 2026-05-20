@@ -1,0 +1,36 @@
+events {
+  worker_connections 1024;
+}
+
+http {
+  server {
+    listen      8000;
+    listen [::]:8000;
+    server_name localhost;
+
+    # All /api/* requests → strip prefix and forward to backend service
+    location /api {
+      rewrite /api/(.*) /$1 break;
+      proxy_pass http://$BACKEND_SERVICE/;
+    }
+
+    # All other requests → frontend service
+    location / {
+      proxy_pass http://$FRONTEND_SERVICE/;
+    }
+
+    # Debug page — shows SPCS headers. Remove in production.
+    location /test {
+      add_header Content-Type text/html;
+      return 200 '<html><body>
+        <h2>Router Test Page</h2>
+        <ul>
+          <li>Sf-Context-Current-User: $http_sf_context_current_user</li>
+          <li>Host: $http_host</li>
+          <li>Frontend: $FRONTEND_SERVICE</li>
+          <li>Backend: $BACKEND_SERVICE</li>
+        </ul>
+      </body></html>';
+    }
+  }
+}

@@ -1,0 +1,30 @@
+version: '3.8'
+
+# Runs the frontend + router locally.
+# The router listens on :8888 and forwards /api → backend (:3000), everything else → frontend (:4000)
+# Make sure your backend is running separately before starting this.
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        FRONTEND_SERVICE_PORT: 4000
+        REACT_APP_BACKEND_SERVICE_URL: /api
+        REACT_APP_CLIENT_VALIDATION: Snowflake
+    ports:
+      - "4000:4000"
+
+  router:
+    build:
+      context: ./router
+      args:
+        FRONTEND_SERVICE: frontend:4000
+        BACKEND_SERVICE:  host.docker.internal:3000
+    environment:
+      FRONTEND_SERVICE: frontend:4000
+      BACKEND_SERVICE:  host.docker.internal:3000
+    ports:
+      - "8888:8000"
+    depends_on:
+      - frontend
