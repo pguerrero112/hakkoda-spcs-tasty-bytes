@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 // ── CORS ─────────────────────────────────────────────────────────────────────
 // In SPCS the router handles routing internally — CORS is only needed locally.
 const corsOrigin = process.env.CLIENT_VALIDATION === 'Dev'
-  ? `http://localhost:${parseInt(PORT) + 1000}`
+  ? `http://localhost:3001`
   : false;
 
 if (corsOrigin) {

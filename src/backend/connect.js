@@ -10,8 +10,7 @@ function buildOptions() {
     warehouse: process.env.SNOWFLAKE_WAREHOUSE,
   };
 
-  // When running inside SPCS, Snowflake mounts an OAuth token at this path.
-  // No username or password needed — the service connects as its owner role.
+  // SPCS mode — OAuth token mounted automatically
   if (fs.existsSync('/snowflake/session/token')) {
     return {
       ...base,
@@ -22,13 +21,15 @@ function buildOptions() {
     };
   }
 
-  // Local development — use username/password from .env
+  // Local development — keypair authentication
+  const privateKey = fs.readFileSync(process.env.SNOWFLAKE_PRIVATE_KEY_PATH, 'utf8');
   return {
     ...base,
-    account:  process.env.SNOWFLAKE_ACCOUNT,
-    username: process.env.SNOWFLAKE_USERNAME,
-    password: process.env.SNOWFLAKE_PASSWORD,
-    role:     process.env.SNOWFLAKE_ROLE,
+    account:       process.env.SNOWFLAKE_ACCOUNT,
+    username:      process.env.SNOWFLAKE_USERNAME,
+    authenticator: 'SNOWFLAKE_JWT',
+    privateKey:    privateKey,
+    role:          process.env.SNOWFLAKE_ROLE,
   };
 }
 
