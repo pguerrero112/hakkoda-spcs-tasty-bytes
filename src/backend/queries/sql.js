@@ -52,7 +52,7 @@ module.exports = {
       SUM(price)       AS revenue
     FROM app.orders
     WHERE franchise_id = :1
-      AND YEAR(order_ts) = YEAR(CURRENT_DATE)
+      AND YEAR(order_ts) = 2022
     GROUP BY country, MONTH(order_ts), MONTHNAME(order_ts)
     ORDER BY month_num
   `,
@@ -135,7 +135,7 @@ module.exports = {
     FROM app.orders
     WHERE franchise_id    = :1
       AND primary_city    = :2
-      AND YEAR(order_ts)  = YEAR(CURRENT_DATE)
+      AND YEAR(order_ts)  = 2022
     GROUP BY primary_city, MONTH(order_ts), MONTHNAME(order_ts)
     ORDER BY month_num
   `,
