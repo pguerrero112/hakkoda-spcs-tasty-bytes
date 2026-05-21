@@ -8,14 +8,12 @@ A full-stack data analytics dashboard for the Tasty Bytes food truck franchise, 
 ---
 
 ## What's Inside
-
-```
 ├── src/
 │   ├── backend/          Node.js + Express API
 │   │   ├── routes/       franchise, trucks, cities, login, health
 │   │   ├── queries/      All SQL queries (parameterized)
 │   │   ├── auth.js       Authentication middleware (Dev / JWT / SPCS)
-│   │   └── connect.js    Snowflake connection (local + SPCS OAuth)
+│   │   └── connect.js    Snowflake connection (local keypair + SPCS OAuth)
 │   └── frontend/
 │       ├── frontend/     React 18 app (Home, Details, Cities pages)
 │       └── router/       NGINX reverse proxy (solves CORS in SPCS)
@@ -24,7 +22,6 @@ A full-stack data analytics dashboard for the Tasty Bytes food truck franchise, 
 ├── docs/
 │   └── ARCHITECTURE.md   Design decisions explained
 └── build-and-push.sh     Builds all images and pushes to Snowflake registry
-```
 
 ## What's New vs. the Snowflake Quickstart
 
@@ -40,61 +37,115 @@ A full-stack data analytics dashboard for the Tasty Bytes food truck franchise, 
 ## Quick Start
 
 ### Prerequisites
-- Docker
 - Node.js 18+
-- A Snowflake Enterprise account with SPCS enabled
+- Docker (for SPCS deployment)
+- A Snowflake account with SPCS enabled
 
 ### 1. Snowflake Setup
-Open `sql/setup.sql`, replace all `[user]` with your username, and run it in a Snowflake worksheet.
+Open `sql/setup.sql`, replace all `[user]` with your username (no dots — use underscores, e.g. `_jane_doe`), and run it in a Snowflake worksheet as ACCOUNTADMIN.
 
-### 2. Local Development
+### 2. Generate Keypair (required if your account has MFA)
+
+```bash
+# Generate private key
+openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
+
+# Generate public key
+openssl rsa -in rsa_key.p8 -pubout -out rsa_key.pub
+
+# Register public key in Snowflake (run in Snowsight as ACCOUNTADMIN)
+ALTER USER YOUR_USERNAME SET RSA_PUBLIC_KEY='<paste contents of rsa_key.pub>';
+```
+
+### 3. Local Development
+
 ```bash
 # Backend
 cd src/backend
-cp .env.example .env        # fill in your Snowflake credentials
-docker compose up
+cp .env.example .env
+# Fill in your Snowflake credentials and private key path
+node app.js
 
-# In another terminal — test it:
+# Test it:
 curl http://localhost:3000/franchise/1
 curl http://localhost:3000/health
 
-# Frontend
-cd src/frontend
-docker compose up
-# Open: http://localhost:8888
+# Frontend (new terminal)
+cd src/frontend/frontend
+cp .env.example .env
+npm install
+npm start
+# Open: http://localhost:3001
 ```
 
-### 3. Deploy to SPCS
+### 4. Deploy to SPCS
+
+> ⚠️ Requires SNOWSERVICES_INGRESS enabled on your Snowflake account.
+> Contact Snowflake Support if CREATE SECURITY INTEGRATION fails.
+
 ```bash
-# Set your repo URL (from: SHOW IMAGE REPOSITORIES in Snowflake)
 export REPO_URL=<your_account>.registry.snowflakecomputing.com/<db>/app/<repo>
 export ADMIN_USER=<your_snowflake_username>
-
 bash build-and-push.sh
-
 # Then run Step 13 of sql/setup.sql to CREATE SERVICE
 ```
 
 ---
 
-## Architecture
+## Troubleshooting
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for a full explanation of:
-- Why two Compute Pools?
-- Why the NGINX router exists (CORS in SPCS)
-- How authentication changes from JWT to SPCS OAuth
-- How the backend connects to Snowflake without credentials
-- What changed from the original quickstart
+### Account identifier format
+Use `<locator>.<region>` format in your `.env`. Find yours with:
+```sql
+SELECT CURRENT_ACCOUNT(), CURRENT_REGION();
+-- Example result: VEB81086 | PUBLIC.AWS_US_EAST_1
+-- Use: VEB81086.us-east-1
+```
+
+### MFA is required error
+If you see `MFA with TOTP is required`, your account enforces MFA and password auth won't work. Use keypair authentication instead (see Step 2 above).
+
+### Find your Snowflake username
+```sql
+SELECT CURRENT_USER();
+```
+Your username may differ from your email address.
+
+### CORS error on localhost
+The frontend runs on port 3001 locally. Make sure `app.js` has:
+```javascript
+const corsOrigin = process.env.CLIENT_VALIDATION === 'Dev'
+  ? 'http://localhost:3001'
+  : false;
+```
+
+### Object name errors with dots
+Snowflake treats dots as object separators. Use underscores in all object names:
+- ✅ `tasty_app_admin_role__jane_doe`
+- ❌ `tasty_app_admin_role__jane.doe`
+
+### CREATE SECURITY INTEGRATION fails
+Requires ACCOUNTADMIN and SNOWSERVICES_INGRESS enabled on your account.
+Contact Snowflake Support to enable SPCS ingress if needed.
 
 ---
 
-## User Accounts (for testing)
+## Architecture
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for a full explanation of all design decisions.
+
+---
+
+## Test User Accounts
 
 | Username | Password | Franchise |
 |---|---|---|
-| `user1_[user]` | `password1` | 1 |
-| `user2_[user]` | `password120` | 120 |
-| `user3_[user]` | `password271` | 271 |
+| `intern_group1` | `Hakkoda2024!` | 1 |
+| `intern_group2` | `Hakkoda2024!` | 120 |
+| `intern_group3` | `Hakkoda2024!` | 271 |
+| `intern_group4` | `Hakkoda2024!` | 1 |
+| `intern_group5` | `Hakkoda2024!` | 120 |
+| `intern_group6` | `Hakkoda2024!` | 271 |
 
 ---
 
