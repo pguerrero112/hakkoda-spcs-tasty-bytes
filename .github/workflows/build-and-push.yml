@@ -61,8 +61,12 @@ jobs:
         env:
           SF_SKIP_TOKEN_FILE_PERMISSIONS_VERIFICATION: true
         run: |
-          snow spcs image-registry token --format=JSON --connection default > /tmp/spcs_token.json
+          set -x
+          snow spcs image-registry token --format=JSON --connection default > /tmp/spcs_token.json 2>&1
+          echo "Exit code: $?"
+          cat /tmp/spcs_token.json
           TOKEN=$(python3 -c "import json; print(json.load(open('/tmp/spcs_token.json'))['token'])")
+          echo "Token length: ${#TOKEN}"
           docker login \
             se58322-snowflake-containers-adrianm.registry.snowflakecomputing.com \
             -u 0sessiontoken \
