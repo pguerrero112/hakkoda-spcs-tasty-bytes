@@ -41,36 +41,26 @@ jobs:
           PYEOF
           echo "token=$(cat /tmp/token.txt)" >> $GITHUB_OUTPUT
 
-      - name: Debug JWT
+      - name: Install Snowflake CLI
+        run: pip install snowflake-cli-labs --quiet
+
+      - name: Configure Snowflake CLI
         run: |
-          pip install PyJWT cryptography --quiet
-          python3 - << 'PYEOF'
-          import jwt
-          token = open('/tmp/token.txt').read().strip()
-          decoded = jwt.decode(token, options={"verify_signature": False})
-          print("ISS:", decoded['iss'])
-          print("SUB:", decoded['sub'])
-          PYEOF
-      - name: Debug fingerprint
-        run: |
-          python3 - << 'PYEOF'
-          import hashlib, base64
-          from cryptography.hazmat.primitives import serialization
-          with open('/tmp/rsa_key.p8', 'rb') as f:
-              private_key = serialization.load_pem_private_key(f.read(), password=None)
-          public_key_raw = private_key.public_key().public_bytes(
-              serialization.Encoding.DER,
-              serialization.PublicFormat.SubjectPublicKeyInfo)
-          fp = 'SHA256:' + base64.b64encode(hashlib.sha256(public_key_raw).digest()).decode()
-          print("Fingerprint:", fp)
-          PYEOF
-          
+          mkdir -p ~/.snowflake
+          cat > ~/.snowflake/config.toml << 'TOML'
+          [connections.default]
+          account = "VEB81086"
+          user = "PGUERRERO"
+          authenticator = "jwt"
+          private_key_path = "/tmp/rsa_key.p8"
+          role = "TASTY_APP_ADMIN_ROLE__PAMELA_GUERRERO"
+          TOML
+
       - name: Login to Snowflake registry
         run: |
-          echo "${{ steps.jwt.outputs.token }}" | docker login \
-            se58322-snowflake-containers-adrianm.registry.snowflakecomputing.com \
-            --username VEB81086/PGUERRERO \
-            --password-stdin
+          snow spcs image-registry token --format=JSON | \
+            docker login se58322-snowflake-containers-adrianm.registry.snowflakecomputing.com \
+            -u 0sessiontoken --password-stdin
 
       - name: Build and push backend
         run: |
