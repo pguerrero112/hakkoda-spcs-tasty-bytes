@@ -51,7 +51,7 @@ jobs:
           [connections.default]
           account = "VEB81086"
           user = "PGUERRERO"
-          authenticator = "jwt"
+          authenticator = "SNOWFLAKE_JWT"
           private_key_path = "/tmp/rsa_key.p8"
           role = "TASTY_APP_ADMIN_ROLE__PAMELA_GUERRERO"
           TOML
