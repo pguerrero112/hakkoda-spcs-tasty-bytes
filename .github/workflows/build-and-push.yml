@@ -61,17 +61,12 @@ jobs:
         env:
           SF_SKIP_TOKEN_FILE_PERMISSIONS_VERIFICATION: true
         run: |
-          # First get the token and show any errors
-          snow spcs image-registry token --format=JSON --connection default > /tmp/spcs_token.json 2>&1 || true
-          cat /tmp/spcs_token.json
-          
-          # Then try login
-          TOKEN=$(python3 -c "import json; print(json.load(open('/tmp/spcs_token.json'))['token'])" 2>/dev/null || echo "")
-          echo "Token empty: $([ -z '$TOKEN' ] && echo yes || echo no)"
-          
-          echo "$TOKEN" | docker login \
+          snow spcs image-registry token --format=JSON --connection default > /tmp/spcs_token.json
+          TOKEN=$(python3 -c "import json; print(json.load(open('/tmp/spcs_token.json'))['token'])")
+          docker login \
             se58322-snowflake-containers-adrianm.registry.snowflakecomputing.com \
-            -u 0sessiontoken --password-stdin
+            -u 0sessiontoken \
+            -p "$TOKEN"
 
       - name: Build and push backend
         run: |
