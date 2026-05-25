@@ -55,10 +55,14 @@ jobs:
           private_key_path = "/tmp/rsa_key.p8"
           role = "TASTY_APP_ADMIN_ROLE__PAMELA_GUERRERO"
           TOML
+          chmod 0600 ~/.snowflake/config.toml
 
       - name: Login to Snowflake registry
+        env:
+          SF_SKIP_TOKEN_FILE_PERMISSIONS_VERIFICATION: true
         run: |
-          snow spcs image-registry token --format=JSON | \
+          snow spcs image-registry token --format=JSON --connection default | \
+            python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" | \
             docker login se58322-snowflake-containers-adrianm.registry.snowflakecomputing.com \
             -u 0sessiontoken --password-stdin
 
