@@ -41,6 +41,17 @@ jobs:
           PYEOF
           echo "token=$(cat /tmp/token.txt)" >> $GITHUB_OUTPUT
 
+      - name: Debug JWT
+        run: |
+          pip install PyJWT cryptography --quiet
+          python3 - << 'PYEOF'
+          import jwt
+          token = open('/tmp/token.txt').read().strip()
+          decoded = jwt.decode(token, options={"verify_signature": False})
+          print("ISS:", decoded['iss'])
+          print("SUB:", decoded['sub'])
+          PYEOF
+              
       - name: Login to Snowflake registry
         run: |
           echo "${{ steps.jwt.outputs.token }}" | docker login \
