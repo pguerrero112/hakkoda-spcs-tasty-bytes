@@ -69,7 +69,7 @@ jobs:
         run: |
           echo "${{ steps.jwt.outputs.token }}" | docker login \
             se58322-snowflake-containers-adrianm.registry.snowflakecomputing.com \
-            --username VEB81086.us-east-1.PGUERRERO \
+            --username VEB81086/PGUERRERO \
             --password-stdin
 
       - name: Build and push backend
