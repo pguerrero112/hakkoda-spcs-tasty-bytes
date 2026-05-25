@@ -43,12 +43,9 @@ jobs:
 
       - name: Login to Snowflake registry
         run: |
-          TOKEN=$(cat /tmp/token.txt)
-          echo "Token length: ${#TOKEN}"
-          echo "Token prefix: ${TOKEN:0:50}"
-          echo "$TOKEN" | docker login \
+          echo "${{ steps.jwt.outputs.token }}" | docker login \
             se58322-snowflake-containers-adrianm.registry.snowflakecomputing.com \
-            --username PGUERRERO \
+            --username SNOWFLAKE_CONTAINERS_ADRIANM/PGUERRERO \
             --password-stdin
 
       - name: Build and push backend
