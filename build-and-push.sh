@@ -32,7 +32,7 @@ echo ""
 
 # ── Login to Snowflake image registry ────────────────────────────────────────
 echo "→ Logging in to Snowflake registry..."
-docker login "$REPO_URL" --username "$ADMIN_USER"
+snow spcs image-registry login --connection spcs
 echo ""
 
 build_and_push() {

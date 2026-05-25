@@ -1,0 +1,5 @@
+node_modules
+.env
+rsa_key.p8
+rsa_key.pub
+*.log
