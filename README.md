@@ -1,6 +1,22 @@
 # Tasty Bytes Analytics — SPCS
 ### Hakkoda Capstone Reference Implementation
 
+## 🚀 Live Demo
+
+The app is deployed and running on Snowpark Container Services:
+
+**URL:** https://nsamyoub-se58322-snowflake-containers-adrianm.snowflakecomputing.app
+
+**Login credentials:**
+| Username | Password | Franchise |
+|---|---|---|
+| `intern_group1` | `Hakkoda2024!` | 1 |
+| `intern_group2` | `Hakkoda2024!` | 120 |
+| `intern_group3` | `Hakkoda2024!` | 271 |
+| `intern_group4` | `Hakkoda2024!` | 1 |
+| `intern_group5` | `Hakkoda2024!` | 120 |
+| `intern_group6` | `Hakkoda2024!` | 271 |
+
 A full-stack data analytics dashboard for the Tasty Bytes food truck franchise, deployed entirely within Snowflake using **Snowpark Container Services (SPCS)**.
 
 > This codebase is the reference implementation for the Hakkoda Consulting Skills Capstone. It extends the original Snowflake quickstart with additional features and a cleaner codebase.
