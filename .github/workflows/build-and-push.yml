@@ -1,0 +1,67 @@
+name: Build and Push to Snowflake Registry
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Write private key
+        run: |
+          echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > /tmp/rsa_key.p8
+          chmod 600 /tmp/rsa_key.p8
+
+      - name: Generate JWT token
+        id: jwt
+        run: |
+          pip install PyJWT cryptography --quiet
+          python3 - << 'PYEOF' > /tmp/token.txt
+          import jwt, time, hashlib, base64
+          from cryptography.hazmat.primitives import serialization
+          with open('/tmp/rsa_key.p8', 'rb') as f:
+              private_key = serialization.load_pem_private_key(f.read(), password=None)
+          public_key_raw = private_key.public_key().public_bytes(
+              serialization.Encoding.DER,
+              serialization.PublicFormat.SubjectPublicKeyInfo)
+          fp = 'SHA256:' + base64.b64encode(hashlib.sha256(public_key_raw).digest()).decode()
+          account = 'SNOWFLAKE_CONTAINERS_ADRIANM'
+          user = 'PGUERRERO'
+          q = f"{account}.{user}"
+          payload = {'iss': f"{q}.{fp}", 'sub': q, 'iat': int(time.time()), 'exp': int(time.time()) + 3600}
+          print(jwt.encode(payload, private_key, algorithm='RS256'))
+          PYEOF
+          echo "token=$(cat /tmp/token.txt)" >> $GITHUB_OUTPUT
+
+      - name: Login to Snowflake registry
+        run: |
+          echo "${{ steps.jwt.outputs.token }}" | docker login \
+            se58322-snowflake-containers-adrianm.registry.snowflakecomputing.com \
+            --username PGUERRERO \
+            --password-stdin
+
+      - name: Build and push backend
+        run: |
+          docker build --platform linux/amd64 \
+            -t ${{ secrets.REPO_URL }}/backend_service_image:latest ./src/backend
+          docker push ${{ secrets.REPO_URL }}/backend_service_image:latest
+
+      - name: Build and push frontend
+        run: |
+          docker build --platform linux/amd64 \
+            -t ${{ secrets.REPO_URL }}/frontend_service_image:latest ./src/frontend/frontend
+          docker push ${{ secrets.REPO_URL }}/frontend_service_image:latest
+
+      - name: Build and push router
+        run: |
+          docker build --platform linux/amd64 \
+            -t ${{ secrets.REPO_URL }}/router_service_image:latest ./src/frontend/router
+          docker push ${{ secrets.REPO_URL }}/router_service_image:latest
