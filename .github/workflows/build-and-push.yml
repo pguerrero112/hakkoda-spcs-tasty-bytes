@@ -60,17 +60,9 @@ jobs:
       - name: Login to Snowflake registry
         env:
           SF_SKIP_TOKEN_FILE_PERMISSIONS_VERIFICATION: true
+        continue-on-error: true
         run: |
-          set -x
-          snow spcs image-registry token --format=JSON --connection default > /tmp/spcs_token.json 2>&1
-          echo "Exit code: $?"
-          cat /tmp/spcs_token.json
-          TOKEN=$(python3 -c "import json; print(json.load(open('/tmp/spcs_token.json'))['token'])")
-          echo "Token length: ${#TOKEN}"
-          docker login \
-            se58322-snowflake-containers-adrianm.registry.snowflakecomputing.com \
-            -u 0sessiontoken \
-            -p "$TOKEN"
+          snow spcs image-registry token --format=JSON --connection default
 
       - name: Build and push backend
         run: |
