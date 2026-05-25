@@ -51,7 +51,20 @@ jobs:
           print("ISS:", decoded['iss'])
           print("SUB:", decoded['sub'])
           PYEOF
-              
+      - name: Debug fingerprint
+        run: |
+          python3 - << 'PYEOF'
+          import hashlib, base64
+          from cryptography.hazmat.primitives import serialization
+          with open('/tmp/rsa_key.p8', 'rb') as f:
+              private_key = serialization.load_pem_private_key(f.read(), password=None)
+          public_key_raw = private_key.public_key().public_bytes(
+              serialization.Encoding.DER,
+              serialization.PublicFormat.SubjectPublicKeyInfo)
+          fp = 'SHA256:' + base64.b64encode(hashlib.sha256(public_key_raw).digest()).decode()
+          print("Fingerprint:", fp)
+          PYEOF
+          
       - name: Login to Snowflake registry
         run: |
           echo "${{ steps.jwt.outputs.token }}" | docker login \
