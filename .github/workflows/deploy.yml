@@ -22,16 +22,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Detect changed services
         id: changes
         run: |
-          git fetch origin main --depth=2
-          CHANGED=$(git diff --name-only HEAD~1 HEAD)
-          echo "$CHANGED"
-          BACKEND=false
-          FRONTEND=false
-          ROUTER=false
+          CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || echo "src/frontend/frontend/")
+          echo "Changed: $CHANGED"
+          BACKEND=false; FRONTEND=false; ROUTER=false
           echo "$CHANGED" | grep -q "^src/backend/"           && BACKEND=true
           echo "$CHANGED" | grep -q "^src/frontend/frontend/" && FRONTEND=true
           echo "$CHANGED" | grep -q "^src/frontend/router/"   && ROUTER=true
@@ -52,7 +51,6 @@ jobs:
           mkdir -p ~/.config/snowflake
           echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > /tmp/rsa_key.p8
           chmod 600 /tmp/rsa_key.p8
-          chmod 0600 ~/.config/snowflake/config.toml
           cat > ~/.config/snowflake/config.toml << EOF
           [connections.spcs]
           account = "${{ secrets.SNOWFLAKE_ACCOUNT }}"
@@ -61,6 +59,7 @@ jobs:
           private_key_path = "/tmp/rsa_key.p8"
           role = "TASTY_APP_ADMIN_ROLE__PAMELA_GUERRERO"
           EOF
+          chmod 0600 ~/.config/snowflake/config.toml
 
       - name: Set up Docker Buildx
         if: steps.changes.outputs.any == 'true'
