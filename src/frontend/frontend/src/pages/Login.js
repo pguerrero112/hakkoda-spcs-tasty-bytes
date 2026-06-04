@@ -9,7 +9,6 @@ export default function Login() {
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
 
-  // In SPCS Snowflake mode: hit /authorize to get a token from the platform
   useEffect(() => {
     if (clientValidation === 'Snowflake') {
       fetch(`${backendURL}/authorize`)
@@ -22,7 +21,6 @@ export default function Login() {
         })
         .catch(() => {});
     } else if (clientValidation === 'Dev') {
-      // Dev mode — skip login entirely
       navigate('/', { state: { franchise: 1 } });
     }
   }, [navigate]);
@@ -48,30 +46,66 @@ export default function Login() {
     }
   }
 
-  if (!enableLogin()) return null; // handled by useEffect redirect
+  if (!enableLogin()) return null;
 
   return (
     <div className="login-page">
+      {/* Ambient glow blobs */}
+      <div className="login-bg-glow" style={{
+        width: 500, height: 500,
+        background: 'radial-gradient(circle, rgba(0,194,168,0.12) 0%, transparent 70%)',
+        top: -100, left: -100,
+      }} />
+      <div className="login-bg-glow" style={{
+        width: 400, height: 400,
+        background: 'radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%)',
+        bottom: -50, right: -50,
+      }} />
+
       <div className="login-card">
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <span style={{ fontSize: 40 }}>🍔</span>
+        <div className="login-logo">
+          <span className="login-logo-emoji">🍔</span>
           <h2>Tasty Bytes Analytics</h2>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>Sign in to your account</p>
+          <p>Sign in to your franchise dashboard</p>
         </div>
+
         <form onSubmit={handleLogin}>
           <div className="form-group">
             <label>Username</label>
-            <input value={username} onChange={e => setUsername(e.target.value)} required autoFocus />
+            <input
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="intern_group1"
+              required
+              autoFocus
+            />
           </div>
           <div className="form-group">
             <label>Password</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+            />
           </div>
+
           {error && <p className="error-msg">{error}</p>}
+
           <button type="submit" className="btn-login" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign in'}
+            {loading ? (
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                Signing in…
+              </span>
+            ) : 'Sign in →'}
           </button>
         </form>
+
+        <p style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginTop: 20 }}>
+          Powered by Snowpark Container Services
+        </p>
       </div>
     </div>
   );

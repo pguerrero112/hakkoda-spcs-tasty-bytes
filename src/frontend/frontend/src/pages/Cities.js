@@ -1,16 +1,20 @@
-// ── Cities View — Hakkoda addition ─────────────────────────────────────────
-// This entire page is NOT in the original Snowflake quickstart.
-// It surfaces city-level performance data for a franchise using the new
-// /franchise/:id/cities and /franchise/:id/cities/:city/trend endpoints.
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line, CartesianGrid,
+  AreaChart, Area, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import Navbar from '../components/Navbar';
 import { backendURL, getRequestOptions, formatCurrency } from '../utils/utils';
+
+function SkeletonChart({ height = 280 }) {
+  return (
+    <div className="card">
+      <div className="skeleton skeleton-title" />
+      <div className="skeleton skeleton-chart" style={{ height }} />
+    </div>
+  );
+}
 
 export default function Cities() {
   const location  = useLocation();
@@ -25,23 +29,21 @@ export default function Cities() {
   const [loading,      setLoading]      = useState(true);
   const [loadingTrend, setLoadingTrend] = useState(false);
 
-  useEffect(() => { loadCities(); }, []);
-
-  async function loadCities() {
+  const loadCities = useCallback(async () => {
     setLoading(true);
     try {
-      const opts = getRequestOptions(authState);
       const res  = await fetch(
-        `${backendURL}/franchise/${franchise}/cities?start=${startDate}&end=${endDate}`, opts
+        `${backendURL}/franchise/${franchise}/cities?start=${startDate}&end=${endDate}`,
+        getRequestOptions(authState)
       );
       const data = await res.json();
       setCities(data);
-      if (data.length) selectCity(data[0].CITY);
+      if (data.length) handleSelectCity(data[0].CITY, data);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
-  }
+  }, [franchise, startDate, endDate]);
 
-  async function selectCity(city) {
+  async function handleSelectCity(city, cityList = cities) {
     setSelectedCity(city);
     setLoadingTrend(true);
     try {
@@ -54,124 +56,157 @@ export default function Cities() {
     finally { setLoadingTrend(false); }
   }
 
-  const topCity    = cities[0];
-  const totalRev   = cities.reduce((s, c) => s + (c.REVENUE || 0), 0);
+  useEffect(() => { loadCities(); }, []);
+
+  const totalRev    = cities.reduce((s, c) => s + (c.REVENUE || 0), 0);
   const totalOrders = cities.reduce((s, c) => s + (c.ORDER_COUNT || 0), 0);
+  const selectedData = cities.find(c => c.CITY === selectedCity);
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar authState={authState} />
-      <div className="page">
 
-        {/* Filter bar */}
+      <div className="page">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">City Performance</h1>
+            <p className="page-subtitle">Revenue breakdown by city · click any city to see its monthly trend</p>
+          </div>
+        </div>
+
         <div className="filter-bar">
-          <span style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 14 }}>🏙️ City View</span>
-          <label>From</label>
+          <span className="filter-label">Period</span>
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
-          <label>To</label>
+          <span className="filter-label" style={{ color: 'var(--text-muted)' }}>→</span>
           <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
           <button className="btn-apply" onClick={loadCities}>Apply</button>
         </div>
 
-        {/* Stat row */}
+        {/* Stats */}
         <div className="stat-row">
           <div className="stat-box">
             <div className="label">Top City</div>
-            <div className="value" style={{ fontSize: 18 }}>{topCity?.CITY || '—'}</div>
+            <div className="value" style={{ fontSize: 18 }}>{cities[0]?.CITY || '—'}</div>
           </div>
-          <div className="stat-box" style={{ borderLeftColor: 'var(--blue)' }}>
-            <div className="label">Total Revenue (Top 15)</div>
-            <div className="value">{formatCurrency(totalRev)}</div>
+          <div className="stat-box" style={{ '--accent': 'var(--blue)' }}>
+            <div className="label">Combined Revenue</div>
+            <div className="value animated-value">{formatCurrency(totalRev)}</div>
           </div>
-          <div className="stat-box" style={{ borderLeftColor: '#F9A825' }}>
+          <div className="stat-box" style={{ '--accent': 'var(--amber)' }}>
             <div className="label">Total Orders</div>
-            <div className="value">{totalOrders.toLocaleString()}</div>
+            <div className="value animated-value">{totalOrders.toLocaleString()}</div>
           </div>
-          <div className="stat-box" style={{ borderLeftColor: '#7B1FA2' }}>
+          <div className="stat-box" style={{ '--accent': 'var(--purple)' }}>
             <div className="label">Cities Tracked</div>
             <div className="value">{cities.length}</div>
           </div>
         </div>
 
-        {loading ? <div className="loading">Loading city data…</div> : (
+        {loading ? (
           <div className="grid-2">
-            {/* Top cities bar chart */}
+            <SkeletonChart height={480} />
+            <SkeletonChart height={480} />
+          </div>
+        ) : (
+          <div className="grid-2">
+            {/* City list */}
             <div className="card">
-              <div className="section-header">
-                <span className="section-title">Top 15 Cities by Revenue</span>
+              <div className="card-header">
+                <span className="card-title">Top 15 Cities</span>
+                <span className="card-badge">by revenue</span>
               </div>
-              <ResponsiveContainer width="100%" height={360}>
-                <BarChart data={cities} layout="vertical" margin={{ left: 80, right: 20 }}>
-                  <XAxis type="number" tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="CITY" tick={{ fontSize: 11 }} width={80} />
-                  <Tooltip
-                    formatter={(v, name) => name === 'REVENUE' ? formatCurrency(v) : v}
-                    labelFormatter={label => {
-                      const c = cities.find(x => x.CITY === label);
-                      return `${label}${c ? ` · ${c.COUNTRY}` : ''}`;
-                    }}
-                  />
-                  <Bar dataKey="REVENUE" fill="#00897B" radius={[0, 4, 4, 0]}
-                    onClick={d => selectCity(d.CITY)}
-                    cursor="pointer"
-                    label={{ position: 'right', formatter: v => formatCurrency(v), fontSize: 10 }}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-                Click a bar to see monthly revenue trend for that city
-              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {cities.map((c, i) => (
+                  <div
+                    key={c.CITY}
+                    className={`city-item ${selectedCity === c.CITY ? 'active' : ''}`}
+                    onClick={() => handleSelectCity(c.CITY)}
+                  >
+                    <span className="city-rank">#{i + 1}</span>
+                    <span className="city-name">{c.CITY}</span>
+                    <span className="city-country">{c.COUNTRY}</span>
+
+                    {/* Mini bar */}
+                    <div style={{ width: 60, height: 4, background: 'var(--border)', borderRadius: 2, marginRight: 12, overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${(c.REVENUE / (cities[0]?.REVENUE || 1)) * 100}%`,
+                        height: '100%',
+                        background: selectedCity === c.CITY ? 'var(--accent)' : 'var(--text-muted)',
+                        borderRadius: 2,
+                        transition: 'width 0.4s ease',
+                      }} />
+                    </div>
+
+                    <span className="city-revenue">{formatCurrency(c.REVENUE)}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* City detail panel */}
+            {/* Trend panel */}
             <div className="card">
-              <div className="section-header">
-                <span className="section-title">
+              <div className="card-header">
+                <span className="card-title">
                   {selectedCity ? `${selectedCity} — Monthly Trend` : 'Select a city'}
                 </span>
+                {selectedData && (
+                  <span className="card-badge">{selectedData.ACTIVE_TRUCKS} trucks</span>
+                )}
               </div>
 
-              {selectedCity && (
-                <>
-                  {/* City stats */}
-                  {(() => {
-                    const c = cities.find(x => x.CITY === selectedCity);
-                    return c ? (
-                      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-                        {[
-                          ['Revenue', formatCurrency(c.REVENUE)],
-                          ['Orders',  c.ORDER_COUNT?.toLocaleString()],
-                          ['Active Trucks', c.ACTIVE_TRUCKS],
-                          ['Country', c.COUNTRY],
-                        ].map(([l, v]) => (
-                          <div key={l} style={{
-                            flex: '1', minWidth: 80,
-                            background: 'var(--bg-primary)', borderRadius: 8,
-                            padding: '8px 12px', borderLeft: '3px solid var(--accent)',
-                          }}>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{l}</div>
-                            <div style={{ fontSize: 15, fontWeight: 700, marginTop: 2 }}>{v}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null;
-                  })()}
+              {selectedCity && selectedData && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                  {[
+                    ['Revenue', formatCurrency(selectedData.REVENUE), 'var(--accent)'],
+                    ['Orders',  selectedData.ORDER_COUNT?.toLocaleString(), 'var(--blue)'],
+                    ['Trucks',  selectedData.ACTIVE_TRUCKS, 'var(--amber)'],
+                    ['Country', selectedData.COUNTRY, 'var(--purple)'],
+                  ].map(([l, v, color]) => (
+                    <div key={l} style={{
+                      background: 'var(--bg-primary)',
+                      borderRadius: 8,
+                      padding: '10px 14px',
+                      borderLeft: `3px solid ${color}`,
+                    }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>{l}</div>
+                      <div style={{ fontSize: 16, fontWeight: 700 }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-                  {loadingTrend ? (
-                    <div className="loading">Loading trend…</div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <LineChart data={trend} margin={{ right: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                        <XAxis dataKey="MONTH_NAME" tick={{ fontSize: 12 }} />
-                        <YAxis tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={v => formatCurrency(v)} />
-                        <Line type="monotone" dataKey="REVENUE" stroke="#00897B"
-                          strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  )}
-                </>
+              {loadingTrend ? (
+                <div className="loading">
+                  <div className="spinner" />
+                  Loading trend…
+                </div>
+              ) : trend.length > 0 ? (
+                <ResponsiveContainer width="100%" height={280}>
+                  <AreaChart data={trend} margin={{ right: 10 }}>
+                    <defs>
+                      <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor="#00C2A8" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#00C2A8" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="MONTH_NAME" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                    <Tooltip
+                      formatter={v => formatCurrency(v)}
+                      contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-bright)', borderRadius: 8, fontSize: 12 }}
+                    />
+                    <Area type="monotone" dataKey="REVENUE" stroke="#00C2A8" strokeWidth={2.5}
+                      fill="url(#trendGrad)" dot={{ r: 3, fill: '#00C2A8', strokeWidth: 0 }}
+                      activeDot={{ r: 5, strokeWidth: 0 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="loading">
+                  <span style={{ fontSize: 32 }}>🏙️</span>
+                  Select a city to view its trend
+                </div>
               )}
             </div>
           </div>
