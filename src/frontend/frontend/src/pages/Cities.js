@@ -7,13 +7,13 @@ import {
 import Navbar from '../components/Navbar';
 import { backendURL, getRequestOptions, formatCurrency } from '../utils/utils';
 
-function SkeletonChart({ height = 280 }) {
-  return (
-    <div className="card">
-      <div className="skeleton skeleton-title" />
-      <div className="skeleton skeleton-chart" style={{ height }} />
-    </div>
-  );
+function getBarColor(value, min, max) {
+  if (max === min) return '#00C2A8';
+  const ratio = (value - min) / (max - min);
+  const hue   = 175 - ratio * 20;
+  const sat   = 40  + ratio * 55;
+  const light = 35  + ratio * 30;
+  return `hsl(${hue}, ${sat}%, ${light}%)`;
 }
 
 export default function Cities() {
@@ -62,6 +62,16 @@ export default function Cities() {
   const totalOrders = cities.reduce((s, c) => s + (c.ORDER_COUNT || 0), 0);
   const selectedData = cities.find(c => c.CITY === selectedCity);
 
+  const cityRevenues = cities.map(c => c.REVENUE || 0);
+  const minRevenue   = Math.min(...cityRevenues);
+  const maxRevenue   = Math.max(...cityRevenues, 1);
+
+  // Dynamic color for selected city based on its rank
+  const selectedIdx = cities.findIndex(c => c.CITY === selectedCity);
+  const trendColor  = selectedIdx >= 0
+    ? getBarColor(cities[selectedIdx]?.REVENUE || 0, minRevenue, maxRevenue)
+    : '#00C2A8';
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar authState={authState} />
@@ -82,7 +92,6 @@ export default function Cities() {
           <button className="btn-apply" onClick={loadCities}>Apply</button>
         </div>
 
-        {/* Stats */}
         <div className="stat-row">
           <div className="stat-box">
             <div className="label">Top City</div>
@@ -104,8 +113,8 @@ export default function Cities() {
 
         {loading ? (
           <div className="grid-2">
-            <SkeletonChart height={480} />
-            <SkeletonChart height={480} />
+            <div className="card"><div className="skeleton skeleton-chart" style={{ height: 480 }} /></div>
+            <div className="card"><div className="skeleton skeleton-chart" style={{ height: 480 }} /></div>
           </div>
         ) : (
           <div className="grid-2">
@@ -126,12 +135,14 @@ export default function Cities() {
                     <span className="city-name">{c.CITY}</span>
                     <span className="city-country">{c.COUNTRY}</span>
 
-                    {/* Mini bar */}
+                    {/* Mini bar with relative color */}
                     <div style={{ width: 60, height: 4, background: 'var(--border)', borderRadius: 2, marginRight: 12, overflow: 'hidden' }}>
                       <div style={{
-                        width: `${(c.REVENUE / (cities[0]?.REVENUE || 1)) * 100}%`,
+                        width: `${(c.REVENUE / maxRevenue) * 100}%`,
                         height: '100%',
-                        background: selectedCity === c.CITY ? 'var(--accent)' : 'var(--text-muted)',
+                        background: selectedCity === c.CITY
+                          ? 'var(--accent)'
+                          : getBarColor(c.REVENUE, minRevenue, maxRevenue),
                         borderRadius: 2,
                         transition: 'width 0.4s ease',
                       }} />
@@ -176,17 +187,14 @@ export default function Cities() {
               )}
 
               {loadingTrend ? (
-                <div className="loading">
-                  <div className="spinner" />
-                  Loading trend…
-                </div>
+                <div className="loading"><div className="spinner" />Loading trend…</div>
               ) : trend.length > 0 ? (
                 <ResponsiveContainer width="100%" height={280}>
                   <AreaChart data={trend} margin={{ right: 10 }}>
                     <defs>
                       <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#00C2A8" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#00C2A8" stopOpacity={0} />
+                        <stop offset="5%"  stopColor={trendColor} stopOpacity={0.35} />
+                        <stop offset="95%" stopColor={trendColor} stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
@@ -196,8 +204,8 @@ export default function Cities() {
                       formatter={v => formatCurrency(v)}
                       contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-bright)', borderRadius: 8, fontSize: 12 }}
                     />
-                    <Area type="monotone" dataKey="REVENUE" stroke="#00C2A8" strokeWidth={2.5}
-                      fill="url(#trendGrad)" dot={{ r: 3, fill: '#00C2A8', strokeWidth: 0 }}
+                    <Area type="monotone" dataKey="REVENUE" stroke={trendColor} strokeWidth={2.5}
+                      fill="url(#trendGrad)" dot={{ r: 3, fill: trendColor, strokeWidth: 0 }}
                       activeDot={{ r: 5, strokeWidth: 0 }}
                     />
                   </AreaChart>

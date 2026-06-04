@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
 
 /* ── CSS Variables ─────────────────────────────────────────────────────── */
 :root {
@@ -26,8 +26,8 @@
   --radius-sm:     8px;
   --radius:        12px;
   --radius-lg:     16px;
-  --font-main:     'Space Grotesk', sans-serif;
-  --font-mono:     'Space Mono', monospace;
+  --font-main:     'Segoe UI', system-ui, sans-serif;
+  --font-mono:     'Courier New', monospace;
 }
 
 [data-theme="light"] {

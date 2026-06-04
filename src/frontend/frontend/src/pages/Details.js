@@ -6,18 +6,15 @@ import {
 import Navbar from '../components/Navbar';
 import { backendURL, getRequestOptions, formatCurrency } from '../utils/utils';
 
-// Day-of-week order
-const DOW_ORDER = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-const DOW_SHORT  = { Monday:'Mon', Tuesday:'Tue', Wednesday:'Wed', Thursday:'Thu', Friday:'Fri', Saturday:'Sat', Sunday:'Sun' };
-
-// Color scale for bars based on value
-function getBarColor(value, max) {
-  const ratio = value / max;
-  if (ratio > 0.8) return '#00C2A8';
-  if (ratio > 0.6) return '#10B981';
-  if (ratio > 0.4) return '#3B82F6';
-  if (ratio > 0.2) return '#8B5CF6';
-  return '#6B7280';
+// Color scale relative to the actual min/max of current dataset
+function getBarColor(value, min, max) {
+  if (max === min) return '#00C2A8';
+  const ratio = (value - min) / (max - min); // 0 = lowest, 1 = highest
+  // Interpolate from muted blue-gray (low) to bright teal (high)
+  const hue   = 175 - ratio * 20;  // 155 (teal) to 175 (blue-green)
+  const sat   = 40  + ratio * 55;  // 40% to 95%
+  const light = 35  + ratio * 30;  // 35% to 65%
+  return `hsl(${hue}, ${sat}%, ${light}%)`;
 }
 
 export default function Details() {
@@ -59,15 +56,19 @@ export default function Details() {
         fetch(`${backendURL}/franchise/${franchise}/brand/${encodeURIComponent(brand)}/items?${params}`, opts),
       ]);
       const dowData   = await dRes.json();
-      // Sort by day of week order
-      const sortedDow = DOW_ORDER.map(d => dowData.find(r => r.DAY_NAME === d)).filter(Boolean);
+      const sortedDow = [...dowData].sort((a, b) => (a.DOW_NUM ?? 0) - (b.DOW_NUM ?? 0));
       setDow(sortedDow);
       setItems(await iRes.json());
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [brand, startDate, endDate, franchise]);
 
-  const maxRevenue = Math.max(...dow.map(d => d.REVENUE || 0), 1);
+  const revenues   = dow.map(d => d.REVENUE || 0);
+  const minRevenue = Math.min(...revenues);
+  const maxRevenue = Math.max(...revenues, 1);
+  const orders     = dow.map(d => d.ORDER_COUNT || 0);
+  const minOrders  = Math.min(...orders);
+  const maxOrders  = Math.max(...orders, 1);
   const bestDay    = dow.reduce((best, d) => (!best || d.REVENUE > best.REVENUE) ? d : best, null);
 
   return (
@@ -85,8 +86,7 @@ export default function Details() {
         {/* Filter bar */}
         <div className="filter-bar">
           <span className="filter-label">Brand</span>
-          <select value={brand} onChange={e => setBrand(e.target.value)}
-            style={{ minWidth: 160 }}>
+          <select value={brand} onChange={e => setBrand(e.target.value)} style={{ minWidth: 160 }}>
             {brands.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
           <span className="filter-label">Period</span>
@@ -96,7 +96,7 @@ export default function Details() {
           <button className="btn-apply" onClick={loadCharts}>Apply</button>
         </div>
 
-        {/* Quick stats from DOW */}
+        {/* Quick stats */}
         {dow.length > 0 && (
           <div className="stat-row" style={{ marginBottom: 16 }}>
             <div className="stat-box">
@@ -115,8 +115,8 @@ export default function Details() {
               <div className="label">Weekend vs Weekday</div>
               <div className="value" style={{ fontSize: 14 }}>
                 {(() => {
-                  const wknd = dow.filter(d => ['Saturday','Sunday'].includes(d.DAY_NAME)).reduce((s,d) => s + d.REVENUE, 0);
-                  const wkdy = dow.filter(d => !['Saturday','Sunday'].includes(d.DAY_NAME)).reduce((s,d) => s + d.REVENUE, 0);
+                  const wknd = dow.filter(d => ['Sat','Sun'].includes(d.DAY_NAME)).reduce((s,d) => s + d.REVENUE, 0);
+                  const wkdy = dow.filter(d => !['Sat','Sun'].includes(d.DAY_NAME)).reduce((s,d) => s + d.REVENUE, 0);
                   return wknd > wkdy ? '📈 Weekend' : '📈 Weekday';
                 })()}
               </div>
@@ -129,7 +129,7 @@ export default function Details() {
         ) : (
           <>
             <div className="grid-2" style={{ marginBottom: 16 }}>
-              {/* Sales by Day of Week — colored bars */}
+              {/* Revenue by Day of Week */}
               <div className="card">
                 <div className="card-header">
                   <span className="card-title">Revenue by Day of Week</span>
@@ -140,17 +140,15 @@ export default function Details() {
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={dow} margin={{ left: 10, right: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="DAY_NAME" tickFormatter={d => DOW_SHORT[d] || d}
-                      tick={{ fontSize: 12, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                    <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}k`}
-                      tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="DAY_NAME" tick={{ fontSize: 12, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={v => `$${(v/1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                     <Tooltip
                       formatter={v => formatCurrency(v)}
                       contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-bright)', borderRadius: 8, fontSize: 12 }}
                     />
                     <Bar dataKey="REVENUE" radius={[4, 4, 0, 0]}>
                       {dow.map((d, i) => (
-                        <Cell key={i} fill={getBarColor(d.REVENUE, maxRevenue)} />
+                        <Cell key={i} fill={getBarColor(d.REVENUE, minRevenue, maxRevenue)} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -161,26 +159,19 @@ export default function Details() {
               <div className="card">
                 <div className="card-header">
                   <span className="card-title">Order Volume by Day</span>
-                  <span className="card-badge" style={{ background: 'var(--blue-dim)', color: 'var(--blue)' }}>
-                    orders
-                  </span>
+                  <span className="card-badge" style={{ background: 'var(--blue-dim)', color: 'var(--blue)' }}>orders</span>
                 </div>
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={dow} margin={{ left: 10, right: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                    <XAxis dataKey="DAY_NAME" tickFormatter={d => DOW_SHORT[d] || d}
-                      tick={{ fontSize: 12, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
+                    <XAxis dataKey="DAY_NAME" tick={{ fontSize: 12, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
-                    <Tooltip
-                      contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-bright)', borderRadius: 8, fontSize: 12 }}
-                    />
-                    <defs>
-                      <linearGradient id="orderGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3B82F6" stopOpacity={1} />
-                        <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.5} />
-                      </linearGradient>
-                    </defs>
-                    <Bar dataKey="ORDER_COUNT" name="Orders" radius={[4, 4, 0, 0]} fill="url(#orderGrad)" />
+                    <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-bright)', borderRadius: 8, fontSize: 12 }} />
+                    <Bar dataKey="ORDER_COUNT" name="Orders" radius={[4, 4, 0, 0]}>
+                      {dow.map((d, i) => (
+                        <Cell key={i} fill={getBarColor(d.ORDER_COUNT, minOrders, maxOrders, 230, 210)} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>

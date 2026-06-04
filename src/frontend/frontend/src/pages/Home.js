@@ -2,31 +2,21 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line, CartesianGrid, Legend,
-  AreaChart, Area,
+  AreaChart, Area, CartesianGrid, Legend, Cell,
 } from 'recharts';
 import Navbar from '../components/Navbar';
 import { backendURL, getRequestOptions, formatCurrency } from '../utils/utils';
 
-// ── Custom Tooltip ────────────────────────────────────────────────────────────
-function CustomTooltip({ active, payload, label, formatter }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="custom-tooltip">
-      <div className="label">{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, display: 'inline-block' }} />
-          <span className="value" style={{ fontSize: 14 }}>
-            {formatter ? formatter(p.value) : p.value}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
+// Color scale relative to min/max of dataset
+function getBarColor(value, min, max, hueStart = 175, hueEnd = 155) {
+  if (max === min) return `hsl(${hueStart}, 70%, 50%)`;
+  const ratio = (value - min) / (max - min);
+  const hue   = hueStart - ratio * (hueStart - hueEnd);
+  const sat   = 40 + ratio * 55;
+  const light = 35 + ratio * 30;
+  return `hsl(${hue}, ${sat}%, ${light}%)`;
 }
 
-// ── Skeleton card ─────────────────────────────────────────────────────────────
 function SkeletonChart({ height = 280 }) {
   return (
     <div className="card">
@@ -36,13 +26,11 @@ function SkeletonChart({ height = 280 }) {
   );
 }
 
-// ── Stat box with animated value ──────────────────────────────────────────────
 function StatBox({ label, value, color = 'var(--accent)', icon }) {
   const [displayed, setDisplayed] = useState('—');
 
   useEffect(() => {
     if (!value) return;
-    // Simple count-up for numbers
     const isNum = typeof value === 'number';
     if (!isNum) { setDisplayed(value); return; }
     const duration = 600;
@@ -117,7 +105,6 @@ export default function Home() {
   useEffect(() => { loadSummary(); }, [loadSummary]);
   useEffect(() => { loadCharts(); }, []);
 
-  // Transform YTD for recharts
   const ytdCountries = [...new Set(ytd.map(r => r.COUNTRY))].slice(0, 5);
   const ytdByMonth = [...new Set(ytd.map(r => r.MONTH_NUM))].sort().map(mn => {
     const row = { month: ytd.find(r => r.MONTH_NUM === mn)?.MONTH_NAME?.slice(0,3) || mn };
@@ -128,14 +115,20 @@ export default function Home() {
     return row;
   });
 
-  const topRevenue = countries[0]?.REVENUE || 0;
+  // Color ranges
+  const countryRevenues = countries.map(c => c.REVENUE || 0);
+  const minCountry = Math.min(...countryRevenues);
+  const maxCountry = Math.max(...countryRevenues, 1);
+
+  const truckRevenues = trucks.map(t => t.REVENUE || 0);
+  const minTruck = Math.min(...truckRevenues);
+  const maxTruck = Math.max(...truckRevenues, 1);
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)' }}>
       <Navbar authState={authState} />
 
       <div className="page">
-        {/* Page header */}
         <div className="page-header">
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
@@ -146,15 +139,11 @@ export default function Home() {
               {summary?.TRUCK_BRAND_NAMES?.length || 0} truck brands · {startDate} — {endDate}
             </p>
           </div>
-          <button
-            className="btn-secondary"
-            onClick={() => navigate('/cities', { state: authState })}
-          >
+          <button className="btn-secondary" onClick={() => navigate('/cities', { state: authState })}>
             🏙️ City View
           </button>
         </div>
 
-        {/* Filter bar */}
         <div className="filter-bar">
           <span className="filter-label">Period</span>
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
@@ -163,17 +152,15 @@ export default function Home() {
           <button className="btn-apply" onClick={loadCharts}>Apply</button>
         </div>
 
-        {/* Stat row */}
         {summary && (
           <div className="stat-row">
             <StatBox label="Truck Brands"  value={summary.TRUCK_BRAND_NAMES?.length} icon="🚚" />
             <StatBox label="Top Country"   value={countries[0]?.COUNTRY || '—'} color="var(--blue)" icon="🌍" />
-            <StatBox label="Top Revenue"   value={formatCurrency(topRevenue)} color="var(--amber)" icon="💰" />
+            <StatBox label="Top Revenue"   value={formatCurrency(countries[0]?.REVENUE)} color="var(--amber)" icon="💰" />
             <StatBox label="Top Brand"     value={trucks[0]?.TRUCK_BRAND_NAME || '—'} color="var(--purple)" icon="⭐" />
           </div>
         )}
 
-        {/* Charts */}
         {loading ? (
           <>
             <div className="grid-2" style={{ marginBottom: 16 }}>
@@ -192,22 +179,27 @@ export default function Home() {
                   <span className="card-badge">{countries.length}</span>
                 </div>
                 <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={countries.slice(0,10)} layout="vertical" margin={{ left: 55, right: 40 }}>
+                  <BarChart data={countries.slice(0,10)} layout="vertical" margin={{ left: 55, right: 50 }}>
                     <XAxis type="number" tickFormatter={v => `$${(v/1000).toFixed(0)}k`}
                       tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                     <YAxis type="category" dataKey="COUNTRY"
                       tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} width={55} />
-                    <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
+                    <Tooltip content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      return (
+                        <div className="custom-tooltip">
+                          <div className="label">{label}</div>
+                          <div className="value">{formatCurrency(payload[0].value)}</div>
+                        </div>
+                      );
+                    }} />
                     <Bar dataKey="REVENUE" radius={[0, 4, 4, 0]}
-                      fill="url(#accentGrad)"
                       label={{ position: 'right', formatter: v => `$${(v/1000).toFixed(0)}k`, fontSize: 10, fill: 'var(--text-muted)' }}
-                    />
-                    <defs>
-                      <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#00C2A8" stopOpacity={0.7} />
-                        <stop offset="100%" stopColor="#00C2A8" stopOpacity={1} />
-                      </linearGradient>
-                    </defs>
+                    >
+                      {countries.slice(0,10).map((c, i) => (
+                        <Cell key={i} fill={getBarColor(c.REVENUE, minCountry, maxCountry)} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -221,21 +213,27 @@ export default function Home() {
                   </span>
                 </div>
                 <ResponsiveContainer width="100%" height={280}>
-                  <BarChart data={trucks.slice(0,10)} layout="vertical" margin={{ left: 95, right: 40 }}>
+                  <BarChart data={trucks.slice(0,10)} layout="vertical" margin={{ left: 95, right: 50 }}>
                     <XAxis type="number" tickFormatter={v => `$${(v/1000).toFixed(0)}k`}
                       tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                     <YAxis type="category" dataKey="TRUCK_BRAND_NAME"
                       tick={{ fontSize: 11, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} width={95} />
-                    <Tooltip content={<CustomTooltip formatter={formatCurrency} />} />
-                    <Bar dataKey="REVENUE" radius={[0, 4, 4, 0]} fill="url(#blueGrad)"
+                    <Tooltip content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null;
+                      return (
+                        <div className="custom-tooltip">
+                          <div className="label">{label}</div>
+                          <div className="value">{formatCurrency(payload[0].value)}</div>
+                        </div>
+                      );
+                    }} />
+                    <Bar dataKey="REVENUE" radius={[0, 4, 4, 0]}
                       label={{ position: 'right', formatter: v => `$${(v/1000).toFixed(0)}k`, fontSize: 10, fill: 'var(--text-muted)' }}
-                    />
-                    <defs>
-                      <linearGradient id="blueGrad" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.7} />
-                        <stop offset="100%" stopColor="#3B82F6" stopOpacity={1} />
-                      </linearGradient>
-                    </defs>
+                    >
+                      {trucks.slice(0,10).map((t, i) => (
+                        <Cell key={i} fill={getBarColor(t.REVENUE, minTruck, maxTruck, 230, 210)} />
+                      ))}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -245,9 +243,7 @@ export default function Home() {
             <div className="card">
               <div className="card-header">
                 <span className="card-title">YTD Revenue by Country — Monthly Trend</span>
-                <span className="card-badge" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--amber)' }}>
-                  2022
-                </span>
+                <span className="card-badge" style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--amber)' }}>2022</span>
               </div>
               <ResponsiveContainer width="100%" height={260}>
                 <AreaChart data={ytdByMonth} margin={{ right: 20 }}>
@@ -278,7 +274,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* Toast */}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );
