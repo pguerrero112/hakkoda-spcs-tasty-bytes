@@ -1,0 +1,156 @@
+name: Deploy Tasty Bytes SPCS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/frontend/**'
+      - 'src/backend/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      REPO: se58322-snowflake-containers-adrianm.registry.snowflakecomputing.com/novacart_db/app/novacart_repository
+      SERVICE_NAME: frontend_service__pamela_guerrero
+      DB: FROSTBYTE_TASTY_BYTES__PAMELA_GUERRERO
+      SCHEMA: APP
+      COMPUTE_POOL: TASTY_APP_BACKEND_COMPUTE_POOL__PAMELA_GUERRERO
+      EXT_ROLE: TASTY_APP_EXT_ROLE__PAMELA_GUERRERO
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect changed services
+        id: changes
+        run: |
+          git fetch origin main --depth=2
+          CHANGED=$(git diff --name-only HEAD~1 HEAD)
+          echo "$CHANGED"
+          BACKEND=false
+          FRONTEND=false
+          ROUTER=false
+          echo "$CHANGED" | grep -q "^src/backend/"           && BACKEND=true
+          echo "$CHANGED" | grep -q "^src/frontend/frontend/" && FRONTEND=true
+          echo "$CHANGED" | grep -q "^src/frontend/router/"   && ROUTER=true
+          echo "backend=$BACKEND"   >> $GITHUB_OUTPUT
+          echo "frontend=$FRONTEND" >> $GITHUB_OUTPUT
+          echo "router=$ROUTER"     >> $GITHUB_OUTPUT
+          ANY=false
+          ( [ "$BACKEND" = "true" ] || [ "$FRONTEND" = "true" ] || [ "$ROUTER" = "true" ] ) && ANY=true
+          echo "any=$ANY" >> $GITHUB_OUTPUT
+
+      - name: Install Snowflake CLI
+        if: steps.changes.outputs.any == 'true'
+        run: pip install snowflake-cli-labs
+
+      - name: Configure Snowflake connection
+        if: steps.changes.outputs.any == 'true'
+        run: |
+          mkdir -p ~/.config/snowflake
+          echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > /tmp/rsa_key.p8
+          chmod 600 /tmp/rsa_key.p8
+          cat > ~/.config/snowflake/config.toml << EOF
+          [connections.spcs]
+          account = "${{ secrets.SNOWFLAKE_ACCOUNT }}"
+          user = "${{ secrets.SNOWFLAKE_USER }}"
+          authenticator = "SNOWFLAKE_JWT"
+          private_key_path = "/tmp/rsa_key.p8"
+          role = "TASTY_APP_ADMIN_ROLE__PAMELA_GUERRERO"
+          EOF
+
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.any == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Snowflake registry
+        if: steps.changes.outputs.any == 'true'
+        run: snow spcs image-registry login --connection spcs
+
+      - name: Build & push backend
+        if: steps.changes.outputs.backend == 'true'
+        run: |
+          docker build --platform linux/amd64 -t backend_service_image:latest ./src/backend
+          docker tag backend_service_image:latest $REPO/backend_service_image:latest
+          docker push $REPO/backend_service_image:latest
+
+      - name: Build & push frontend
+        if: steps.changes.outputs.frontend == 'true'
+        run: |
+          docker build --platform linux/amd64 -t frontend_service_image:latest ./src/frontend/frontend
+          docker tag frontend_service_image:latest $REPO/frontend_service_image:latest
+          docker push $REPO/frontend_service_image:latest
+
+      - name: Build & push router
+        if: steps.changes.outputs.router == 'true'
+        run: |
+          docker build --platform linux/amd64 -t router_service_image:latest ./src/frontend/router
+          docker tag router_service_image:latest $REPO/router_service_image:latest
+          docker push $REPO/router_service_image:latest
+
+      - name: Recreate SPCS service
+        if: steps.changes.outputs.any == 'true'
+        run: |
+          snow sql --connection spcs -q "
+          USE ROLE TASTY_APP_ADMIN_ROLE__PAMELA_GUERRERO;
+          USE DATABASE $DB;
+          USE SCHEMA $SCHEMA;
+          DROP SERVICE IF EXISTS $SERVICE_NAME;
+          CREATE SERVICE $SERVICE_NAME
+            IN COMPUTE POOL $COMPUTE_POOL
+            FROM SPECIFICATION \$\$
+            spec:
+              container:
+              - name: backend
+                image: $REPO/backend_service_image:latest
+                env:
+                  PORT: '3000'
+                  CLIENT_VALIDATION: Snowflake
+                  SNOWFLAKE_WAREHOUSE: TASTY_APP_WAREHOUSE__PAMELA_GUERRERO
+                  ACCESS_TOKEN_SECRET: hakkoda2024
+                  REFRESH_TOKEN_SECRET: hakkoda2024refresh
+              - name: frontend
+                image: $REPO/frontend_service_image:latest
+                env:
+                  PORT: '4000'
+                  REACT_APP_BACKEND_URL: /api
+                  REACT_APP_CLIENT_VALIDATION: Snowflake
+              - name: router
+                image: $REPO/router_service_image:latest
+                env:
+                  FRONTEND_SERVICE: localhost:4000
+                  BACKEND_SERVICE: localhost:3000
+              endpoint:
+              - name: routerendpoint
+                port: 8000
+                public: true
+            \$\$
+            MIN_INSTANCES=1 MAX_INSTANCES=1;
+          GRANT USAGE ON SERVICE $SERVICE_NAME TO ROLE $EXT_ROLE;
+          GRANT SERVICE ROLE $SERVICE_NAME!ALL_ENDPOINTS_USAGE TO ROLE $EXT_ROLE;
+          "
+
+      - name: Wait for service ready
+        if: steps.changes.outputs.any == 'true'
+        run: |
+          for i in {1..20}; do
+            STATUS=$(snow sql --connection spcs -q \
+              "SELECT SYSTEM\$GET_SERVICE_STATUS('$DB.$SCHEMA.$SERVICE_NAME');" \
+              --format json 2>/dev/null || echo "")
+            if echo "$STATUS" | grep -q '"status":"READY"'; then
+              echo "Service is READY"
+              exit 0
+            fi
+            echo "Waiting... ($i/20)"
+            sleep 15
+          done
+          exit 1
+
+      - name: Get app URL
+        if: steps.changes.outputs.any == 'true'
+        run: |
+          snow sql --connection spcs -q \
+            "USE DATABASE $DB; USE SCHEMA $SCHEMA; SHOW ENDPOINTS IN SERVICE $SERVICE_NAME;" \
+            --format table 2>/dev/null | grep -i "routerendpoint" || true
