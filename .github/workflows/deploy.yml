@@ -52,6 +52,7 @@ jobs:
           mkdir -p ~/.config/snowflake
           echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > /tmp/rsa_key.p8
           chmod 600 /tmp/rsa_key.p8
+          chmod 0600 ~/.config/snowflake/config.toml
           cat > ~/.config/snowflake/config.toml << EOF
           [connections.spcs]
           account = "${{ secrets.SNOWFLAKE_ACCOUNT }}"
