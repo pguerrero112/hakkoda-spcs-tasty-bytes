@@ -8,10 +8,10 @@ import { backendURL, getRequestOptions, formatCurrency } from '../utils/utils';
 
 // Color scale relative to the actual min/max of current dataset
 function getBarColor(value, min, max) {
-  if (max === min) return '#00C2A8';
+  if (max === min) return '#3B82F6';
   const ratio = (value - min) / (max - min); // 0 = lowest, 1 = highest
-  // Interpolate from muted blue-gray (low) to bright teal (high)
-  const hue   = 175 - ratio * 20;  // 155 (teal) to 175 (blue-green)
+  // Interpolate from muted blue (low) to bright blue (high)
+  const hue   = 225 - ratio * 15;  // 210 to 225 (blue range)
   const sat   = 40  + ratio * 55;  // 40% to 95%
   const light = 35  + ratio * 30;  // 35% to 65%
   return `hsl(${hue}, ${sat}%, ${light}%)`;
