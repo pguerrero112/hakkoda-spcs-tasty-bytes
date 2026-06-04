@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/frontend/**'
       - 'src/backend/**'
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -42,32 +43,34 @@ jobs:
           echo "any=$ANY" >> $GITHUB_OUTPUT
 
       - name: Install Snowflake CLI
-        if: steps.changes.outputs.any == 'true'
-        run: pip install snowflake-cli-labs
+        run: pip install snowflake-cli-labs --quiet
 
       - name: Configure Snowflake connection
-        if: steps.changes.outputs.any == 'true'
         run: |
-          mkdir -p ~/.config/snowflake
+          mkdir -p ~/.snowflake
           echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > /tmp/rsa_key.p8
           chmod 600 /tmp/rsa_key.p8
-          cat > ~/.config/snowflake/config.toml << EOF
+          cat > ~/.snowflake/config.toml << 'TOML'
           [connections.spcs]
-          account = "${{ secrets.SNOWFLAKE_ACCOUNT }}"
-          user = "${{ secrets.SNOWFLAKE_USER }}"
+          account = "VEB81086.us-east-1"
+          user = "PGUERRERO"
           authenticator = "SNOWFLAKE_JWT"
           private_key_path = "/tmp/rsa_key.p8"
           role = "TASTY_APP_ADMIN_ROLE__PAMELA_GUERRERO"
-          EOF
-          chmod 0600 ~/.config/snowflake/config.toml
+          TOML
+          chmod 0600 ~/.snowflake/config.toml
 
       - name: Set up Docker Buildx
-        if: steps.changes.outputs.any == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to Snowflake registry
-        if: steps.changes.outputs.any == 'true'
-        run: snow spcs image-registry login --connection spcs
+        run: |
+          snow spcs image-registry login \
+            --connection spcs \
+            --account VEB81086.us-east-1 \
+            --user PGUERRERO \
+            --authenticator SNOWFLAKE_JWT \
+            --private-key-file /tmp/rsa_key.p8
 
       - name: Build & push backend
         if: steps.changes.outputs.backend == 'true'
