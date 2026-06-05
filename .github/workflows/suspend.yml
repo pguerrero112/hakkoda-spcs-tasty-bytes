@@ -1,0 +1,51 @@
+name: Suspend Tasty Bytes App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  suspend:
+    runs-on: ubuntu-latest
+
+    env:
+      SERVICE_NAME: frontend_service__pamela_guerrero
+      DB: FROSTBYTE_TASTY_BYTES__PAMELA_GUERRERO
+      SCHEMA: APP
+
+    steps:
+      - name: Install Snowflake CLI
+        run: pip install snowflake-cli-labs --quiet
+
+      - name: Configure Snowflake connection
+        run: |
+          mkdir -p ~/.snowflake
+          echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > /tmp/rsa_key.p8
+          chmod 600 /tmp/rsa_key.p8
+          cat > ~/.snowflake/config.toml << 'TOML'
+          [connections.spcs]
+          account = "VEB81086.us-east-1"
+          user = "PGUERRERO"
+          authenticator = "SNOWFLAKE_JWT"
+          private_key_path = "/tmp/rsa_key.p8"
+          role = "TASTY_APP_ADMIN_ROLE__PAMELA_GUERRERO"
+          TOML
+          chmod 0600 ~/.snowflake/config.toml
+
+      - name: Suspend service
+        run: |
+          snow sql --connection spcs -q "
+          USE ROLE TASTY_APP_ADMIN_ROLE__PAMELA_GUERRERO;
+          USE DATABASE $DB;
+          USE SCHEMA $SCHEMA;
+          ALTER SERVICE $SERVICE_NAME SUSPEND;
+          "
+
+      - name: Confirm status
+        run: |
+          snow sql --connection spcs -q "
+          USE DATABASE $DB;
+          USE SCHEMA $SCHEMA;
+          SELECT SYSTEM\$GET_SERVICE_STATUS('$DB.$SCHEMA.$SERVICE_NAME');
+          " --format table
+          echo "## ⏸️ Service suspended" >> $GITHUB_STEP_SUMMARY
+          echo "Run **Resume Tasty Bytes App** to bring it back up." >> $GITHUB_STEP_SUMMARY
