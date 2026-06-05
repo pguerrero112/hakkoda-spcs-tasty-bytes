@@ -1,168 +1,145 @@
-# Tasty Bytes Analytics — SPCS
-### Hakkoda Capstone Reference Implementation
+# Tasty Bytes SPCS — Analytics Dashboard
 
-## 🚀 Live Demo
-
-The app is deployed and running on Snowpark Container Services:
-
-**URL:** https://nsamyoub-se58322-snowflake-containers-adrianm.snowflakecomputing.app
-
-**Login credentials:**
-| Username | Password | Franchise |
-|---|---|---|
-| `intern_group1` | `Hakkoda2024!` | 1 |
-| `intern_group2` | `Hakkoda2024!` | 120 |
-| `intern_group3` | `Hakkoda2024!` | 271 |
-| `intern_group4` | `Hakkoda2024!` | 1 |
-| `intern_group5` | `Hakkoda2024!` | 120 |
-| `intern_group6` | `Hakkoda2024!` | 271 |
-
-A full-stack data analytics dashboard for the Tasty Bytes food truck franchise, deployed entirely within Snowflake using **Snowpark Container Services (SPCS)**.
-
-> This codebase is the reference implementation for the Hakkoda Consulting Skills Capstone. It extends the original Snowflake quickstart with additional features and a cleaner codebase.
+Full-stack analytics dashboard for Tasty Bytes franchisees, deployed on Snowpark Container Services (SPCS). Built by Hakkoda as the foundation for **Consulting Skills Capstone 3: Technical Code Review**.
 
 ---
 
-## What's Inside
-├── src/
-│   ├── backend/          Node.js + Express API
-│   │   ├── routes/       franchise, trucks, cities, login, health
-│   │   ├── queries/      All SQL queries (parameterized)
-│   │   ├── auth.js       Authentication middleware (Dev / JWT / SPCS)
-│   │   └── connect.js    Snowflake connection (local keypair + SPCS OAuth)
-│   └── frontend/
-│       ├── frontend/     React 18 app (Home, Details, Cities pages)
-│       └── router/       NGINX reverse proxy (solves CORS in SPCS)
-├── sql/
-│   └── setup.sql         Full Snowflake setup — run this first
-├── docs/
-│   └── ARCHITECTURE.md   Design decisions explained
-└── build-and-push.sh     Builds all images and pushes to Snowflake registry
+## For Facilitators
 
-## What's New vs. the Snowflake Quickstart
+Everything is managed through GitHub Actions — no Snowflake access required for day-to-day operations.
 
-- 🏙️ **City Analytics view** — Top 15 cities by revenue + monthly trend per city
-- 📊 **Order volume charts** — Not just revenue, but order count by day of week
-- 🔍 **Truck brand filter** — Selectable in the frontend UI
-- 🟢 **`/health` endpoint** — Structured health check with Snowflake connectivity status
-- 🟢 **Service status indicator** — Live in the navbar, polls `/health` every 30s
-- 🌙 **Dark mode** — Persisted via localStorage
+### Before the Capstone — Resume the App
 
----
+1. Go to **Actions** → **Resume Tasty Bytes App**
+2. Click **Run workflow** → **Run workflow**
+3. Wait ~2 minutes — the URL prints at the end of the run
 
-## Quick Start
+### After the Capstone — Suspend the App
 
-### Prerequisites
-- Node.js 18+
-- Docker (for SPCS deployment)
-- A Snowflake account with SPCS enabled
+1. Go to **Actions** → **Suspend Tasty Bytes App**
+2. Click **Run workflow** → **Run workflow**
 
-### 1. Snowflake Setup
-Open `sql/setup.sql`, replace all `[user]` with your username (no dots — use underscores, e.g. `_jane_doe`), and run it in a Snowflake worksheet as ACCOUNTADMIN.
+### Intern Credentials
 
-### 2. Generate Keypair (required if your account has MFA)
+| User | Password |
+|---|---|
+| intern_group1 | Hakkoda2024! |
+| intern_group2 | Hakkoda2024! |
+| intern_group3 | Hakkoda2024! |
+| intern_group4 | Hakkoda2024! |
+| intern_group5 | Hakkoda2024! |
+| intern_group6 | Hakkoda2024! |
 
-```bash
-# Generate private key
-openssl genrsa 2048 | openssl pkcs8 -topk8 -inform PEM -out rsa_key.p8 -nocrypt
-
-# Generate public key
-openssl rsa -in rsa_key.p8 -pubout -out rsa_key.pub
-
-# Register public key in Snowflake (run in Snowsight as ACCOUNTADMIN)
-ALTER USER YOUR_USERNAME SET RSA_PUBLIC_KEY='<paste contents of rsa_key.pub>';
-```
-
-### 3. Local Development
-
-```bash
-# Backend
-cd src/backend
-cp .env.example .env
-# Fill in your Snowflake credentials and private key path
-node app.js
-
-# Test it:
-curl http://localhost:3000/franchise/1
-curl http://localhost:3000/health
-
-# Frontend (new terminal)
-cd src/frontend/frontend
-cp .env.example .env
-npm install
-npm start
-# Open: http://localhost:3001
-```
-
-### 4. Deploy to SPCS
-
-> ⚠️ Requires SNOWSERVICES_INGRESS enabled on your Snowflake account.
-> Contact Snowflake Support if CREATE SECURITY INTEGRATION fails.
-
-```bash
-export REPO_URL=<your_account>.registry.snowflakecomputing.com/<db>/app/<repo>
-export ADMIN_USER=<your_snowflake_username>
-bash build-and-push.sh
-# Then run Step 13 of sql/setup.sql to CREATE SERVICE
-```
-
----
-
-## Troubleshooting
-
-### Account identifier format
-Use `<locator>.<region>` format in your `.env`. Find yours with:
-```sql
-SELECT CURRENT_ACCOUNT(), CURRENT_REGION();
--- Example result: VEB81086 | PUBLIC.AWS_US_EAST_1
--- Use: VEB81086.us-east-1
-```
-
-### MFA is required error
-If you see `MFA with TOTP is required`, your account enforces MFA and password auth won't work. Use keypair authentication instead (see Step 2 above).
-
-### Find your Snowflake username
-```sql
-SELECT CURRENT_USER();
-```
-Your username may differ from your email address.
-
-### CORS error on localhost
-The frontend runs on port 3001 locally. Make sure `app.js` has:
-```javascript
-const corsOrigin = process.env.CLIENT_VALIDATION === 'Dev'
-  ? 'http://localhost:3001'
-  : false;
-```
-
-### Object name errors with dots
-Snowflake treats dots as object separators. Use underscores in all object names:
-- ✅ `tasty_app_admin_role__jane_doe`
-- ❌ `tasty_app_admin_role__jane.doe`
-
-### CREATE SECURITY INTEGRATION fails
-Requires ACCOUNTADMIN and SNOWSERVICES_INGRESS enabled on your account.
-Contact Snowflake Support to enable SPCS ingress if needed.
+> **Note:** Interns log in through Snowflake SSO — they will be prompted for MFA on first login. Users are pre-configured with `DISABLE_MFA = TRUE` to skip this.
 
 ---
 
 ## Architecture
 
-See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for a full explanation of all design decisions.
+```
+Browser
+  └── SPCS Public Endpoint (port 8000)
+        └── router (nginx)
+              ├── /api/* → backend (Node.js, port 3000)
+              │              └── Snowflake (FROSTBYTE_TASTY_BYTES__PAMELA_GUERRERO)
+              └── /* → frontend (React, port 4000)
+```
+
+All three containers run in a single SPCS service on `TASTY_APP_BACKEND_COMPUTE_POOL__PAMELA_GUERRERO`.
+
+### Key Files
+
+```
+src/
+├── backend/              # Node.js + Express API
+│   ├── app.js            # Server entrypoint
+│   ├── auth.js           # SPCS OAuth + JWT auth
+│   ├── connect.js        # Snowflake connection
+│   └── routes/           # API endpoints
+├── frontend/
+│   ├── frontend/         # React app
+│   │   └── src/
+│   │       ├── pages/    # Home, Details, Cities, Login
+│   │       └── components/ # Navbar, ServiceStatus
+│   └── router/           # nginx reverse proxy
+│       └── nginx.conf.template
+```
+
+### API Endpoints
+
+| Endpoint | Description |
+|---|---|
+| `GET /health` | Service health check |
+| `GET /authorize` | SPCS OAuth token exchange |
+| `GET /franchise/:id` | Franchise summary |
+| `GET /franchise/:id/countries` | Revenue by country |
+| `GET /franchise/:id/trucks` | Revenue by truck brand |
+| `GET /franchise/:id/ytd-revenue` | YTD revenue by country/month |
+| `GET /franchise/:id/brand/:brand/dow` | Sales by day of week |
+| `GET /franchise/:id/brand/:brand/items` | Top menu items |
+| `GET /franchise/:id/cities` | Revenue by city |
+| `GET /franchise/:id/cities/:city/trend` | Monthly trend for a city |
 
 ---
 
-## Test User Accounts
+## CI/CD
 
-| Username | Password | Franchise |
+Three GitHub Actions workflows:
+
+| Workflow | Trigger | What it does |
 |---|---|---|
-| `intern_group1` | `Hakkoda2024!` | 1 |
-| `intern_group2` | `Hakkoda2024!` | 120 |
-| `intern_group3` | `Hakkoda2024!` | 271 |
-| `intern_group4` | `Hakkoda2024!` | 1 |
-| `intern_group5` | `Hakkoda2024!` | 120 |
-| `intern_group6` | `Hakkoda2024!` | 271 |
+| **Deploy Tasty Bytes SPCS** | Push to `main` (src changes) or manual | Build → push images → DROP/CREATE service |
+| **Resume Tasty Bytes App** | Manual | `ALTER SERVICE RESUME` + prints URL |
+| **Suspend Tasty Bytes App** | Manual | `ALTER SERVICE SUSPEND` |
+
+### Required GitHub Secrets
+
+| Secret | Value |
+|---|---|
+| `SNOWFLAKE_ACCOUNT` | `VEB81086.us-east-1` |
+| `SNOWFLAKE_USER` | `PGUERRERO` |
+| `SNOWFLAKE_PRIVATE_KEY` | Contents of `rsa_key.p8` |
 
 ---
 
-*Built by Hakkoda — hakkoda.io*
+## Local Development
+
+```bash
+# Install dependencies
+cd src/backend && npm install
+cd src/frontend/frontend && npm install
+
+# Run backend locally
+cd src/backend
+CLIENT_VALIDATION=Dev node app.js
+
+# Run frontend locally
+cd src/frontend/frontend
+REACT_APP_BACKEND_URL=http://localhost:3000 npm start
+```
+
+### Deploy to SPCS
+
+```bash
+# Deploy all containers
+bash deploy.sh
+
+# Deploy only what changed
+bash deploy.sh frontend
+bash deploy.sh backend
+bash deploy.sh router
+```
+
+---
+
+## Snowflake Resources
+
+| Resource | Name |
+|---|---|
+| Database | `FROSTBYTE_TASTY_BYTES__PAMELA_GUERRERO` |
+| Schema | `APP` |
+| Service | `FRONTEND_SERVICE__PAMELA_GUERRERO` |
+| Compute Pool | `TASTY_APP_BACKEND_COMPUTE_POOL__PAMELA_GUERRERO` |
+| Warehouse | `TASTY_APP_WAREHOUSE__PAMELA_GUERRERO` |
+| Role | `TASTY_APP_ADMIN_ROLE__PAMELA_GUERRERO` |
+| Image Registry | `novacart_db/app/novacart_repository` |
