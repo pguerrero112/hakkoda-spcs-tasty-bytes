@@ -35,78 +35,38 @@ jobs:
           chmod 0600 ~/.snowflake/config.toml
 
       - name: Resume service
-        run: |
-          snow sql --connection spcs -q "
-          USE ROLE TASTY_APP_ADMIN_ROLE__PAMELA_GUERRERO;
-          USE DATABASE $DB;
-          USE SCHEMA $SCHEMA;
-          ALTER SERVICE $SERVICE_NAME RESUME;
-          "
+        run: snow sql --connection spcs -q "USE ROLE TASTY_APP_ADMIN_ROLE__PAMELA_GUERRERO; USE DATABASE $DB; USE SCHEMA $SCHEMA; ALTER SERVICE $SERVICE_NAME RESUME;"
 
       - name: Wait for READY
         run: |
           echo "Waiting for service to be ready..."
           sleep 90
           for i in {1..10}; do
-            STATUS=$(snow sql --connection spcs -q \
-              "USE DATABASE $DB; USE SCHEMA $SCHEMA; SHOW ENDPOINTS IN SERVICE $SERVICE_NAME;" \
-              --format table 2>/dev/null || echo "")
-            echo "$STATUS" | grep -q "routerendpoint" && break
+            STATUS=$(snow sql --connection spcs -q "USE DATABASE $DB; USE SCHEMA $SCHEMA; SHOW ENDPOINTS IN SERVICE $SERVICE_NAME;" --format table 2>/dev/null || echo "")
+            echo "$STATUS" | grep -q "routerendpoint" && echo "Ready!" && break
             echo "Still starting... ($i/10)"
             sleep 30
           done
 
-      - name: Update README with live URL
+      - name: Get app URL
+        id: url
         run: |
-          # Get URL using JSON format for reliable parsing
-          URL=$(snow sql --connection spcs -q \
-            "USE DATABASE $DB; USE SCHEMA $SCHEMA; SHOW ENDPOINTS IN SERVICE $SERVICE_NAME;" \
-            --format json 2>/dev/null \
-            | python3 -c "
-import sys, json
-try:
-    rows = json.load(sys.stdin)
-    for row in rows:
-        ingress = row.get('ingress_url') or row.get('INGRESS_URL') or ''
-        if ingress:
-            print(ingress)
-            break
-except:
-    pass
-" || echo "")
-
+          snow sql --connection spcs -q "USE DATABASE $DB; USE SCHEMA $SCHEMA; SHOW ENDPOINTS IN SERVICE $SERVICE_NAME;" --format json 2>/dev/null > /tmp/endpoints.json
+          URL=$(python3 .github/scripts/get_url.py 2>/dev/null || echo "")
+          echo "url=$URL" >> $GITHUB_OUTPUT
           echo "App URL: https://$URL"
 
-          if [ -z "$URL" ]; then
-            echo "Could not extract URL — skipping README update"
-            exit 0
-          fi
-
-          # Update or insert live app line in README
-          if grep -q "Live app:" README.md; then
-            python3 -c "
-import re, sys
-with open('README.md', 'r') as f:
-    content = f.read()
-content = re.sub(r'> \*\*Live app:\*\*.*', '> **Live app:** https://$URL', content)
-with open('README.md', 'w') as f:
-    f.write(content)
-"
-          else
-            python3 -c "
-with open('README.md', 'r') as f:
-    content = f.read()
-content = content.replace('# Tasty Bytes SPCS', '# Tasty Bytes SPCS\n\n> **Live app:** https://$URL')
-with open('README.md', 'w') as f:
-    f.write(content)
-"
-          fi
-
+      - name: Update README with live URL
+        if: steps.url.outputs.url != ''
+        run: |
+          python3 .github/scripts/update_readme.py "${{ steps.url.outputs.url }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add README.md
           git diff --staged --quiet || git commit -m "docs: update live app URL [skip ci]"
           git push
 
+      - name: Summary
+        run: |
           echo "## ▶️ App is live" >> $GITHUB_STEP_SUMMARY
-          echo "**URL:** https://$URL" >> $GITHUB_STEP_SUMMARY
+          echo "**URL:** https://${{ steps.url.outputs.url }}" >> $GITHUB_STEP_SUMMARY
