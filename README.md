@@ -1,6 +1,6 @@
 # Tasty Bytes SPCS
 
-> **Live app:** https://nzamyoub-se58322-snowflake-containers-adrianm.snowflakecomputing.app
+> **Live app:** https://b6amyoub-se58322-snowflake-containers-adrianm.snowflakecomputing.app/
 
 
 Full-stack analytics dashboard for Tasty Bytes franchisees, deployed on Snowpark Container Services (SPCS). Built by Hakkoda as the foundation for **Consulting Skills Capstone 3: Technical Code Review**.
